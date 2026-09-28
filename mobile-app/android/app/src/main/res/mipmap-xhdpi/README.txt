@@ -1,0 +1,1 @@
+Placeholder — generate real launcher icons via Android Studio's Image Asset tool (right-click res/ > New > Image Asset) or https://icon.kitchen, using ic_launcher.png + ic_launcher_round.png at this density.

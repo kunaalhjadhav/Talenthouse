@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: platform_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_env}
+      POSTGRES_DB: platform_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "4000:4000"
+    command: sh -c "npx prisma migrate deploy && node dist/main"
+
+  admin-dashboard:
+    build:
+      context: ./admin-dashboard
+    restart: unless-stopped
+    env_file:
+      - ./admin-dashboard/.env.local
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+
+  website:
+    build:
+      context: ./website
+    restart: unless-stopped
+    env_file:
+      - ./website/.env.local
+    depends_on:
+      - backend
+    ports:
+      - "3002:3002"
+
+volumes:
+  postgres_data:

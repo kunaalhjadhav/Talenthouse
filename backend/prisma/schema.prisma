@@ -1,0 +1,877 @@
+// ==========================================================
+// TALENT/CONTEST/AUDITION PLATFORM — CORE DATABASE SCHEMA
+// PostgreSQL via Prisma ORM
+// ==========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- ENUMS ----------------
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  FINANCE_ADMIN
+  CONTENT_MODERATOR
+  SUPPORT_ADMIN
+  CONTEST_MANAGER
+  TALENT_MANAGER
+  HOST
+  JUDGE
+  RECRUITER
+  TALENT
+  PARTICIPANT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  PENDING_VERIFICATION
+  DELETED
+}
+
+enum ContestStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUIRED
+  APPROVED
+  REJECTED
+  LIVE
+  REGISTRATION_CLOSED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum ContestMode {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum RegistrationStatus {
+  PENDING_PAYMENT
+  REGISTERED
+  DISQUALIFIED
+  WITHDRAWN
+}
+
+enum AuditionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  LIVE
+  CLOSED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SHORTLISTED
+  SELECTED_FOR_AUDITION
+  REJECTED
+  SELECTED
+  CONTRACTED
+  COMPLETED
+}
+
+enum BookingStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  ADVANCE_PAID
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+}
+
+enum PaymentPurpose {
+  CONTEST_REGISTRATION
+  VOTING
+  BOOKING_ADVANCE
+  BOOKING_BALANCE
+  SUBSCRIPTION
+  OTHER
+}
+
+enum WalletTxnType {
+  CREDIT
+  DEBIT
+  HOLD
+  RELEASE
+  WITHDRAWAL
+  REFUND
+  ADJUSTMENT
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BOOKED
+  TENTATIVE
+  UNAVAILABLE
+  BLOCKED
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+  FAILED
+}
+
+// ---------------- CORE USER ----------------
+
+model User {
+  id            String     @id @default(uuid())
+  mobile        String     @unique
+  email         String?    @unique
+  name          String?
+  passwordHash  String?
+  role          UserRole   @default(PARTICIPANT)
+  status        UserStatus @default(PENDING_VERIFICATION)
+  profilePhoto  String?
+  city          String?
+  latitude      Float?
+  longitude     Float?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  profile         Profile?
+  talentProfile   TalentProfile?
+  judgeProfile    JudgeProfile?
+  wallet          Wallet?
+  kyc             Kyc?
+  contestsHosted  Contest[]           @relation("HostContests")
+  registrations   ContestRegistration[]
+  auditionsPosted Audition[]          @relation("RecruiterAuditions")
+  applications    AuditionApplication[]
+  bookingsAsCustomer Booking[]        @relation("CustomerBookings")
+  votes           Vote[]
+  reels           Reel[]
+  notifications   Notification[]
+  otpCodes        OtpCode[]
+  refreshTokens   RefreshToken[]
+  following       Follow[]            @relation("Following")
+  followers       Follow[]            @relation("Followers")
+
+  @@index([role])
+  @@index([status])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("Following", fields: [followerId], references: [id])
+  followingId String
+  followingUser User   @relation("Followers", fields: [followingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@index([followerId])
+}
+
+model Profile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  bio                String?
+  category           String?
+  skills             String[]
+  experienceYears    Int?
+  languages          String[]
+  verificationStatus KycStatus @default(NOT_SUBMITTED)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  mobile    String
+  codeHash  String
+  purpose   String   @default("LOGIN")
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([mobile, purpose])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String
+  deviceId  String?
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ---------------- WALLET / COMMISSION ----------------
+
+model Wallet {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  balance            Decimal  @default(0) @db.Decimal(14, 2)
+  pendingBalance     Decimal  @default(0) @db.Decimal(14, 2)
+  withdrawableBalance Decimal @default(0) @db.Decimal(14, 2)
+  currency           String   @default("INR")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id          String        @id @default(uuid())
+  walletId    String
+  wallet      Wallet        @relation(fields: [walletId], references: [id])
+  type        WalletTxnType
+  amount      Decimal       @db.Decimal(14, 2)
+  balanceAfter Decimal      @db.Decimal(14, 2)
+  reference   String?       // e.g. contest id, booking id, payout batch id
+  description String?
+  createdAt   DateTime      @default(now())
+
+  @@index([walletId])
+}
+
+model Kyc {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  panNumber     String?
+  bankAccountNo String?
+  ifsc          String?
+  accountHolder String?
+  status        KycStatus @default(NOT_SUBMITTED)
+  rejectionNote String?
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model WithdrawalRequest {
+  id            String           @id @default(uuid())
+  userId        String
+  amount        Decimal          @db.Decimal(14, 2)
+  status        WithdrawalStatus @default(REQUESTED)
+  payoutReference String?        // RazorpayX payout id, or manual batch reference
+  rejectionNote String?
+  requestedAt   DateTime         @default(now())
+  processedAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// Admin-configurable commission / fee rules. Never hard-code percentages in code —
+/// always resolve through this table (see CommissionService).
+model CommissionRule {
+  id          String   @id @default(uuid())
+  scope       String   // "CONTEST", "BOOKING", "VOTING"
+  key         String   // e.g. category slug, "GLOBAL", talentId, etc.
+  percentage  Decimal  @db.Decimal(5, 2) // e.g. 25.00 = 25%
+  fixedFee    Decimal? @db.Decimal(14, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, key])
+}
+
+// ---------------- CATEGORIES (generic, admin-managed) ----------------
+
+model Category {
+  id        String   @id @default(uuid())
+  type      String   // "CONTEST" | "REEL" | "TALENT" | "AUDITION" | "SKILL"
+  name      String
+  slug      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  @@unique([type, slug])
+}
+
+// ---------------- CONTESTS ----------------
+
+model Contest {
+  id                String         @id @default(uuid())
+  hostId            String
+  host              User           @relation("HostContests", fields: [hostId], references: [id])
+  title             String
+  description       String
+  category          String
+  subcategory       String?
+  bannerUrl         String?
+  promoVideoUrl     String?
+  rules             String?
+  minAge            Int?
+  maxAge            Int?
+  genderEligibility String?        // "ANY" | "MALE" | "FEMALE" | "OTHER"
+  mode              ContestMode    @default(ONLINE)
+  venueAddress      String?
+  latitude          Float?
+  longitude         Float?
+  registrationOpensAt  DateTime
+  registrationClosesAt DateTime
+  startDate         DateTime
+  endDate           DateTime
+  entryFee          Decimal        @db.Decimal(14, 2) @default(0)
+  maxParticipants   Int?
+  numWinners        Int            @default(1)
+  prizePool         Decimal        @db.Decimal(14, 2) @default(0)
+  commissionPct     Decimal?       @db.Decimal(5, 2) // overrides CommissionRule if set
+  publicVotingEnabled Boolean      @default(false)
+  votingFee         Decimal?       @db.Decimal(14, 2)
+  judgeWeightPct    Decimal        @db.Decimal(5, 2) @default(70)
+  voteWeightPct     Decimal        @db.Decimal(5, 2) @default(30)
+  status            ContestStatus  @default(DRAFT)
+  rejectionNote     String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  rounds        ContestRound[]
+  registrations ContestRegistration[]
+  judges        ContestJudge[]
+  scoringCriteria ScoringCriterion[]
+  votes         Vote[]
+  awards        ContestAward[]
+  payments      Payment[]
+
+  @@index([status])
+  @@index([category])
+}
+
+model ContestRound {
+  id        String   @id @default(uuid())
+  contestId String
+  contest   Contest  @relation(fields: [contestId], references: [id])
+  name      String
+  order     Int
+  startDate DateTime?
+  endDate   DateTime?
+}
+
+model ScoringCriterion {
+  id         String  @id @default(uuid())
+  contestId  String
+  contest    Contest @relation(fields: [contestId], references: [id])
+  name       String  // e.g. "Performance"
+  weightPct  Decimal @db.Decimal(5, 2)
+}
+
+model ContestRegistration {
+  id            String              @id @default(uuid())
+  contestId     String
+  contest       Contest             @relation(fields: [contestId], references: [id])
+  userId        String
+  user          User                @relation(fields: [userId], references: [id])
+  paymentId     String?
+  status        RegistrationStatus  @default(PENDING_PAYMENT)
+  performanceUrl String?
+  judgeScore    Decimal?            @db.Decimal(6, 2)
+  publicVoteScore Decimal?          @db.Decimal(6, 2)
+  finalScore    Decimal?            @db.Decimal(6, 2)
+  rank          Int?
+  createdAt     DateTime            @default(now())
+
+  scores JudgeScore[]
+
+  @@unique([contestId, userId])
+}
+
+model ContestJudge {
+  id        String   @id @default(uuid())
+  contestId String
+  contest   Contest  @relation(fields: [contestId], references: [id])
+  judgeId   String
+  judge     JudgeProfile @relation(fields: [judgeId], references: [id])
+  feeAgreed Decimal? @db.Decimal(14, 2)
+  paid      Boolean  @default(false)
+
+  @@unique([contestId, judgeId])
+}
+
+model JudgeScore {
+  id             String   @id @default(uuid())
+  registrationId String
+  registration   ContestRegistration @relation(fields: [registrationId], references: [id])
+  judgeUserId    String
+  criterion      String
+  score          Decimal  @db.Decimal(6, 2)
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@unique([registrationId, judgeUserId, criterion])
+}
+
+model ContestAward {
+  id        String  @id @default(uuid())
+  contestId String
+  contest   Contest @relation(fields: [contestId], references: [id])
+  title     String  // "Winner", "Runner-up", "People's Choice"
+  registrationId String?
+  prizeDescription String?
+}
+
+model Vote {
+  id          String   @id @default(uuid())
+  contestId   String
+  contest     Contest  @relation(fields: [contestId], references: [id])
+  registrationId String
+  voterId     String
+  voter       User     @relation(fields: [voterId], references: [id])
+  isPaid      Boolean  @default(false)
+  amount      Decimal? @db.Decimal(14, 2)
+  deviceFingerprint String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([contestId, registrationId])
+  @@index([voterId, contestId, createdAt])
+}
+
+// ---------------- JUDGES ----------------
+
+model JudgeProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  category     String?
+  bio          String?
+  isCelebrity  Boolean  @default(false)
+  baseFee      Decimal? @db.Decimal(14, 2)
+  verified     Boolean  @default(false)
+  rating       Decimal? @db.Decimal(3, 2)
+  createdAt    DateTime @default(now())
+
+  contests ContestJudge[]
+}
+
+// ---------------- AUDITIONS ----------------
+
+model Audition {
+  id               String   @id @default(uuid())
+  recruiterId      String
+  recruiter        User     @relation("RecruiterAuditions", fields: [recruiterId], references: [id])
+  title            String
+  companyName      String?
+  category         String
+  description      String
+  requirements     String?
+  minAge           Int?
+  maxAge           Int?
+  gender           String?
+  location         String?
+  latitude         Float?
+  longitude        Float?
+  compensation     String?
+  applicationDeadline DateTime
+  auditionDate     DateTime?
+  numOpenings      Int      @default(1)
+  status           AuditionStatus @default(DRAFT)
+  createdAt        DateTime @default(now())
+
+  applications AuditionApplication[]
+}
+
+model AuditionApplication {
+  id          String            @id @default(uuid())
+  auditionId  String
+  audition    Audition          @relation(fields: [auditionId], references: [id])
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  portfolioUrls String[]
+  resumeUrl   String?
+  status      ApplicationStatus @default(APPLIED)
+  slot        DateTime?
+  createdAt   DateTime          @default(now())
+
+  @@unique([auditionId, userId])
+}
+
+// ---------------- TALENT MARKETPLACE / BOOKINGS ----------------
+
+model TalentProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  stageName     String?
+  category      String
+  skills        String[]
+  basePrice     Decimal  @db.Decimal(14, 2)
+  serviceRadiusKm Int?
+  city          String?
+  latitude      Float?
+  longitude     Float?
+  rating        Decimal? @db.Decimal(3, 2)
+  verified      Boolean  @default(false)
+  portfolioUrls String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  availability CalendarSlot[]
+  bookings     Booking[]
+}
+
+model CalendarSlot {
+  id        String              @id @default(uuid())
+  talentId  String
+  talent    TalentProfile       @relation(fields: [talentId], references: [id])
+  date      DateTime
+  startTime String
+  endTime   String
+  status    AvailabilityStatus  @default(AVAILABLE)
+
+  @@index([talentId, date])
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  customerId     String
+  customer       User          @relation("CustomerBookings", fields: [customerId], references: [id])
+  talentId       String
+  talent         TalentProfile @relation(fields: [talentId], references: [id])
+  eventType      String?
+  eventDate      DateTime
+  startTime      String?
+  endTime        String?
+  venueAddress   String?
+  latitude       Float?
+  longitude      Float?
+  amount         Decimal       @db.Decimal(14, 2)
+  advancePct     Decimal       @db.Decimal(5, 2) @default(30)
+  advanceAmount  Decimal       @db.Decimal(14, 2)
+  balanceAmount  Decimal       @db.Decimal(14, 2)
+  commissionPct  Decimal?      @db.Decimal(5, 2)
+  status         BookingStatus @default(REQUESTED)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  payments Payment[]
+}
+
+// ---------------- PAYMENTS ----------------
+
+model Payment {
+  id              String         @id @default(uuid())
+  userId          String
+  purpose         PaymentPurpose
+  amount          Decimal        @db.Decimal(14, 2)
+  currency        String         @default("INR")
+  status          PaymentStatus  @default(INITIATED)
+  razorpayOrderId String?        @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  contestId       String?
+  contest         Contest?       @relation(fields: [contestId], references: [id])
+  bookingId       String?
+  booking         Booking?       @relation(fields: [bookingId], references: [id])
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([razorpayPaymentId])
+}
+
+// ---------------- REELS ----------------
+
+model Reel {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  videoUrl    String   // final playable URL once processing completes (empty/placeholder while PROCESSING)
+  thumbnailUrl String?
+  category    String
+  caption     String?
+  hashtags    String[]
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  shares      Int      @default(0)
+  status      String   @default("PUBLISHED") // DRAFT, PROCESSING, PUBLISHED, REMOVED, UNDER_REVIEW, FAILED
+  muxAssetId    String? // Mux asset id — set once upload is received
+  muxPlaybackId String? // Mux playback id — set once transcoding completes (this is what videoUrl is derived from)
+  createdAt   DateTime @default(now())
+
+  @@index([status, category])
+}
+
+// ---------------- NOTIFICATIONS ----------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  type      String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String   // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ---------------- RATINGS & REVIEWS ----------------
+
+enum RatingTargetType {
+  TALENT
+  HOST
+  RECRUITER
+  JUDGE
+  BOOKING
+}
+
+model Rating {
+  id           String           @id @default(uuid())
+  raterId      String
+  targetType   RatingTargetType
+  targetId     String           // userId for TALENT/HOST/RECRUITER/JUDGE, bookingId for BOOKING
+  stars        Int              // 1-5
+  review       String?
+  moderated    Boolean          @default(false)
+  hidden       Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+
+  @@unique([raterId, targetType, targetId])
+  @@index([targetType, targetId])
+}
+
+// ---------------- DISPUTES ----------------
+
+enum DisputeType {
+  BOOKING
+  CONTEST
+  PAYMENT
+  REFUND
+  TALENT_PERFORMANCE
+  HOST_CANCELLATION
+  NO_SHOW
+  AUDITION
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED_REFUND
+  RESOLVED_PAYOUT
+  RESOLVED_NO_ACTION
+  REJECTED
+}
+
+model Dispute {
+  id           String        @id @default(uuid())
+  raisedById   String
+  type         DisputeType
+  referenceId  String        // bookingId, contestId, paymentId, etc. depending on type
+  description  String
+  evidenceUrls String[]
+  status       DisputeStatus @default(OPEN)
+  resolutionNote String?
+  resolvedBy   String?
+  createdAt    DateTime      @default(now())
+  resolvedAt   DateTime?
+
+  @@index([status])
+  @@index([raisedById])
+}
+
+// ---------------- REFERRALS ----------------
+
+model Referral {
+  id            String   @id @default(uuid())
+  referrerId    String
+  refereeId     String   @unique // a user can only be referred once
+  code          String
+  bonusAmount   Decimal? @db.Decimal(14, 2)
+  bonusPaid     Boolean  @default(false)
+  qualifyingActionAt DateTime? // set once the referee completes the minimum qualifying transaction
+  createdAt     DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+// ---------------- SUBSCRIPTIONS ----------------
+
+enum SubscriptionPlan {
+  FREE
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Subscription {
+  id        String             @id @default(uuid())
+  userId    String             @unique
+  plan      SubscriptionPlan   @default(FREE)
+  status    SubscriptionStatus @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  expiresAt DateTime?
+  autoRenew Boolean            @default(false)
+  lastPaymentId String?
+
+  @@index([plan])
+}
+
+// ---------------- ADVERTISING ----------------
+
+enum AdType {
+  BANNER
+  VIDEO
+  REEL
+  SPONSORED_TALENT
+  SPONSORED_CONTEST
+  NATIVE
+}
+
+enum AdStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+model Advertisement {
+  id          String   @id @default(uuid())
+  title       String
+  type        AdType
+  mediaUrl    String?
+  targetUrl   String?
+  placement   String   // "HOME_BANNER" | "REELS_FEED" | "CONTEST_SECTION" | "TALENT_SECTION" | "AUDITION_SECTION"
+  category    String?
+  city        String?
+  startDate   DateTime
+  endDate     DateTime
+  budget      Decimal? @db.Decimal(14, 2)
+  status      AdStatus @default(DRAFT)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([status, placement])
+}
+
+// ---------------- LIVE STREAMING (schema/integration scaffold — see LiveModule for status) ----------------
+
+enum LiveSessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+model LiveSession {
+  id           String            @id @default(uuid())
+  hostId       String
+  contestId    String?           // optional — a live session can be a standalone stream or tied to a contest round
+  title        String
+  status       LiveSessionStatus @default(SCHEDULED)
+  provider     String            @default("none") // "agora" | "100ms" | "none" — set once a vendor is integrated
+  providerRoomId String?         // vendor-side room/channel identifier
+  isPaid       Boolean           @default(false)
+  price        Decimal?          @db.Decimal(14, 2)
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  viewerCount  Int               @default(0)
+  createdAt    DateTime          @default(now())
+
+  @@index([status])
+  @@index([hostId])
+}
+
+// ---------------- AUDIT LOG ----------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String
+  module    String
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+// ---------------- CHAT ----------------
+
+model Conversation {
+  id          String    @id @default(uuid())
+  participantAId String
+  participantBId String
+  context     String?   // e.g. "booking:<id>", "audition:<id>" — lets the UI show why two people are talking
+  createdAt   DateTime  @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages    Message[]
+
+  @@unique([participantAId, participantBId, context])
+  @@index([participantAId])
+  @@index([participantBId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  body           String
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
