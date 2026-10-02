@@ -26,36 +26,18 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { AdsModule } from './modules/ads/ads.module';
 import { LiveModule } from './modules/live/live.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]), // global default; tighter limits set per-route (e.g. OTP)
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
-    AuthModule,
-    UsersModule,
-    WalletModule,
-    CommissionModule,
-    ContestsModule,
-    TalentsModule,
-    BookingsModule,
-    VotingModule,
-    PaymentsModule,
-    AdminModule,
-    AuditionsModule,
-    ReelsModule,
-    SocialModule,
-    JudgesModule,
-    ChatModule,
-    NotificationsModule,
-    RatingsModule,
-    DisputesModule,
-    ReferralsModule,
-    SubscriptionsModule,
-    AdsModule,
-    LiveModule,
+    AuthModule, UsersModule, WalletModule, CommissionModule, ContestsModule, TalentsModule, BookingsModule,
+    VotingModule, PaymentsModule, AdminModule, AuditionsModule, ReelsModule, SocialModule, JudgesModule,
+    ChatModule, NotificationsModule, RatingsModule, DisputesModule, ReferralsModule, SubscriptionsModule, AdsModule, LiveModule,
+    UploadsModule,
   ],
-  // Without this, the @Throttle() limits on routes (e.g. 3 OTP requests/min) are never enforced.
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
