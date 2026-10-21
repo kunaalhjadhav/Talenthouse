@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsArray } from 'class-validator';
-
+import { IsString, IsOptional, IsNumber } from 'class-validator';
 export class CreateAuditionDto {
   @IsString() title: string;
   @IsOptional() @IsString() companyName?: string;
   @IsString() category: string;
+  @IsOptional() @IsString() designation?: string;
+  @IsOptional() @IsString() posterUrl?: string;
   @IsString() description: string;
   @IsOptional() @IsString() requirements?: string;
   @IsOptional() @IsNumber() minAge?: number;
@@ -13,12 +14,7 @@ export class CreateAuditionDto {
   @IsOptional() @IsNumber() latitude?: number;
   @IsOptional() @IsNumber() longitude?: number;
   @IsOptional() @IsString() compensation?: string;
-  @IsDateString() applicationDeadline: string;
-  @IsOptional() @IsDateString() auditionDate?: string;
+  @IsString() applicationDeadline: string;
+  @IsOptional() @IsString() auditionDate?: string;
   @IsOptional() @IsNumber() numOpenings?: number;
-}
-
-export class ApplyToAuditionDto {
-  @IsOptional() @IsArray() portfolioUrls?: string[];
-  @IsOptional() @IsString() resumeUrl?: string;
 }

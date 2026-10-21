@@ -1,7 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import * as express from 'express';
 import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
@@ -12,8 +11,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true, rawBody: true });
   app.set('trust proxy', 1);
   app.use(helmet());
-  app.use('/api/v1/payments/webhook', express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
-  app.use('/api/v1/reels/mux-webhook', express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
+  // NOTE: do not add path-scoped express.json() parsers here. They stop Nest's own body parser and every request body arrives empty.
+  // `rawBody: true` above already exposes req.rawBody for the Razorpay and Mux webhook signature checks.
 
   // NEW: serve uploaded images (contest banners, audition posters) statically.
   // See uploads.controller.ts for the important note about ephemeral storage on free hosting tiers.

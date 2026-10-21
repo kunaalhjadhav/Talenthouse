@@ -1,75 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-
-const DEFAULT_CONTEST_COMMISSION_PCT = 25;
-const DEFAULT_BOOKING_COMMISSION_PCT = 15;
-const DEFAULT_VOTING_COMMISSION_PCT = 20;
-
+import { SettingsService } from '../settings/settings.service';
 export type CommissionScope = 'CONTEST' | 'BOOKING' | 'VOTING';
 
-/**
- * Central, admin-configurable commission engine.
- * Nothing in the platform should hard-code a percentage — every module resolves
- * its cut through this service, which checks (in order of priority):
- *   1. An entity-specific override (e.g. Contest.commissionPct)
- *   2. A CommissionRule keyed to a specific category/talent/etc.
- *   3. A CommissionRule keyed "GLOBAL" for that scope
- *   4. A hardcoded platform default (last-resort fallback only)
- */
 @Injectable()
 export class CommissionService {
-  constructor(private prisma: PrismaService) {}
-
-  private defaultFor(scope: CommissionScope): number {
-    switch (scope) {
-      case 'CONTEST':
-        return DEFAULT_CONTEST_COMMISSION_PCT;
-      case 'BOOKING':
-        return DEFAULT_BOOKING_COMMISSION_PCT;
-      case 'VOTING':
-        return DEFAULT_VOTING_COMMISSION_PCT;
-    }
-  }
-
+  constructor(private prisma: PrismaService, private settings: SettingsService) {}
+  private async defaultFor(scope: CommissionScope): Promise<number> { const s = await this.settings.all(); switch (scope) { case 'CONTEST': return s.contestCommission; case 'BOOKING': return s.bookingCommission; case 'VOTING': return s.votingCommission; } }
   async resolvePercentage(scope: CommissionScope, key?: string, entityOverride?: number | null): Promise<number> {
-    if (entityOverride !== undefined && entityOverride !== null) {
-      return Number(entityOverride);
-    }
-
-    if (key) {
-      const specific = await this.prisma.commissionRule.findUnique({
-        where: { scope_key: { scope, key } },
-      });
-      if (specific?.active) return Number(specific.percentage);
-    }
-
-    const global = await this.prisma.commissionRule.findUnique({
-      where: { scope_key: { scope, key: 'GLOBAL' } },
-    });
-    if (global?.active) return Number(global.percentage);
-
+    if (entityOverride !== undefined && entityOverride !== null) return Number(entityOverride);
+    if (key && key !== 'GLOBAL') { const specific = await this.prisma.commissionRule.findUnique({ where: { scope_key: { scope, key } } }); if (specific?.active) return Number(specific.percentage); }
+    // The global rate lives in the admin Settings (single source of truth).
     return this.defaultFor(scope);
   }
-
-  /** Splits a gross amount into platform commission + net payout, given a resolved percentage. */
   split(grossAmount: number, commissionPct: number) {
     const commission = Math.round((grossAmount * commissionPct) / 100 * 100) / 100;
     const net = Math.round((grossAmount - commission) * 100) / 100;
     return { grossAmount, commissionPct, commission, net };
   }
-
+  private globalKey(scope: CommissionScope) { return scope === 'CONTEST' ? 'contestCommission' : scope === 'BOOKING' ? 'bookingCommission' : 'votingCommission'; }
   async upsertRule(scope: CommissionScope, key: string, percentage: number, fixedFee?: number) {
-    return this.prisma.commissionRule.upsert({
-      where: { scope_key: { scope, key } },
-      create: { scope, key, percentage, fixedFee, active: true },
-      update: { percentage, fixedFee, active: true },
-    });
+    if (key === 'GLOBAL') { await this.settings.setMany({ [this.globalKey(scope)]: percentage }); return { scope, key, percentage, active: true }; }
+    return this.prisma.commissionRule.upsert({ where: { scope_key: { scope, key } }, create: { scope, key, percentage, fixedFee, active: true }, update: { percentage, fixedFee, active: true } });
   }
-
   async listRules(scope?: CommissionScope) {
-    return this.prisma.commissionRule.findMany({
-      where: scope ? { scope } : undefined,
-      orderBy: [{ scope: 'asc' }, { key: 'asc' }],
-    });
+    const s = await this.settings.all();
+    const globals = (['CONTEST', 'BOOKING', 'VOTING'] as CommissionScope[]).filter((c) => !scope || c === scope).map((c) => ({ id: `global-${c}`, scope: c, key: 'GLOBAL', percentage: (s as any)[this.globalKey(c)], active: true }));
+    const rows = await this.prisma.commissionRule.findMany({ where: { ...(scope ? { scope } : {}), key: { not: 'GLOBAL' } }, orderBy: [{ scope: 'asc' }, { key: 'asc' }] });
+    return [...globals, ...rows];
   }
 }

@@ -1,0 +1,12 @@
+Add these to backend/package.json:
+
+"dependencies": {
+  ... (keep everything existing) ...
+  "multer": "^1.4.5-lts.1"
+},
+"devDependencies": {
+  ... (keep everything existing) ...
+  "@types/multer": "^1.4.11"
+}
+
+Then run: npm install

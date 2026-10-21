@@ -1,0 +1,3 @@
+export const CONTENT_CATEGORIES = ['All', 'Dance', 'Music', 'Singing', 'Acting', 'Stunts', 'Craft', 'Comedy', 'Fashion', 'Beauty', 'Cooking', 'Fitness', 'Sports', 'Gaming', 'Travel', 'Lifestyle', 'Vlog', 'Art', 'Photography', 'Tech', 'Kids', 'Pets', 'Mimicry', 'Motivation', 'Education', 'Other'];
+export const TALENT_CATEGORIES = ['All', 'Singer', 'Dancer', 'Actor', 'Comedian', 'MC/Anchor', 'DJ', 'Musician', 'Photographer', 'Videographer', 'Makeup Artist', 'Choreographer', 'Fitness Trainer', 'Magician', 'Model', 'Influencer', 'Other'];
+export const AUDITION_CATEGORIES = ['All', 'Movies', 'Web Series', 'TV', 'Advertisements', 'Music Videos', 'Modelling', 'Voice-over', 'Theatre', 'Dance Shows', 'Reality Shows', 'Other'];

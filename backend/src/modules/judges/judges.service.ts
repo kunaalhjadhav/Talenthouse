@@ -3,7 +3,8 @@ import { PrismaService } from '../../config/prisma.service';
 @Injectable()
 export class JudgesService {
   constructor(private prisma: PrismaService) {}
-  async createOrUpdateProfile(userId: string, data: any) { return this.prisma.judgeProfile.upsert({ where: { userId }, create: { userId, ...data }, update: data }); }
+  /** Whitelisted: judges can't verify themselves or mark themselves celebrity. */
+  async createOrUpdateProfile(userId: string, data: any) { const clean: any = {}; for (const k of ['category', 'bio', 'baseFee']) if (data?.[k] !== undefined) clean[k] = data[k]; return this.prisma.judgeProfile.upsert({ where: { userId }, create: { userId, ...clean }, update: clean }); }
   async myProfile(userId: string) { return this.prisma.judgeProfile.findUnique({ where: { userId } }); }
   /** NEW: public-ish listing of verified judges, so hosts can browse and assign one to their contest. */
   async listVerified(category?: string) {

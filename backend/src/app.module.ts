@@ -26,16 +26,23 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { AdsModule } from './modules/ads/ads.module';
 import { LiveModule } from './modules/live/live.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SettingsModule } from './modules/settings/settings.module';
+import { EngagementModule } from './modules/engagement/engagement.module';
+import { BattlesModule } from './modules/battles/battles.module';
+import { PublicModule } from './modules/public/public.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
-    PrismaModule,
+    ScheduleModule.forRoot(),
+    PrismaModule, SettingsModule, EngagementModule,
     AuthModule, UsersModule, WalletModule, CommissionModule, ContestsModule, TalentsModule, BookingsModule,
     VotingModule, PaymentsModule, AdminModule, AuditionsModule, ReelsModule, SocialModule, JudgesModule,
-    ChatModule, NotificationsModule, RatingsModule, DisputesModule, ReferralsModule, SubscriptionsModule, AdsModule, LiveModule,
+    ChatModule, NotificationsModule, RatingsModule, DisputesModule, ReferralsModule, SubscriptionsModule, AdsModule, LiveModule, BattlesModule, PublicModule, TasksModule,
     UploadsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

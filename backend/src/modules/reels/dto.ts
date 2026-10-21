@@ -1,5 +1,4 @@
 import { IsString, IsOptional, IsArray } from 'class-validator';
-
 export class CreateReelDto {
   @IsOptional() @IsString() videoUrl?: string;
   @IsOptional() @IsString() muxUploadId?: string;

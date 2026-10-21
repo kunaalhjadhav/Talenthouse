@@ -5,11 +5,6 @@ import { RazorpayService } from './razorpay.service';
 import { CommissionModule } from '../commission/commission.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { ReferralsModule } from '../referrals/referrals.module';
-
-@Module({
-  imports: [CommissionModule, WalletModule, ReferralsModule],
-  providers: [PaymentsService, RazorpayService],
-  controllers: [PaymentsController],
-  exports: [PaymentsService, RazorpayService],
-})
+import { NotificationsModule } from '../notifications/notifications.module';
+@Module({ imports: [CommissionModule, WalletModule, ReferralsModule, NotificationsModule], providers: [PaymentsService, RazorpayService], controllers: [PaymentsController], exports: [PaymentsService, RazorpayService] })
 export class PaymentsModule {}

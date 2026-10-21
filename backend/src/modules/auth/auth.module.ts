@@ -4,12 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
+import { SmsService } from './sms.service';
 import { JwtStrategy } from './jwt.strategy';
-
-@Module({
-  imports: [PassportModule, JwtModule.register({})],
-  controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy],
-  exports: [AuthService],
-})
+@Module({ imports: [PassportModule, JwtModule.register({})], controllers: [AuthController], providers: [AuthService, OtpService, SmsService, JwtStrategy], exports: [AuthService] })
 export class AuthModule {}

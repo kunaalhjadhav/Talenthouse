@@ -1,6 +1,5 @@
-import { IsString, IsNumber, IsOptional, IsDateString, IsEnum, Min, IsBoolean, IsArray } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsDateString, IsEnum, Min, IsBoolean } from 'class-validator';
 import { ContestMode } from '@prisma/client';
-
 export class CreateContestDto {
   @IsString() title: string;
   @IsString() description: string;
@@ -27,9 +26,10 @@ export class CreateContestDto {
   @IsOptional() @IsBoolean() publicVotingEnabled?: boolean;
   @IsOptional() @IsNumber() votingFee?: number;
 }
-
-export class ScoreDto {
-  @IsString() criterion: string;
-  @IsNumber() score: number;
-  @IsOptional() @IsString() comment?: string;
+export class ScoreDto { @IsString() criterion: string; @IsNumber() score: number; @IsOptional() @IsString() comment?: string; }
+export class UpdateContestFinancialsDto {
+  @IsOptional() @IsNumber() @Min(0) entryFee?: number;
+  @IsOptional() @IsNumber() @Min(0) prizePool?: number;
+  @IsOptional() @IsNumber() @Min(1) numWinners?: number;
+  @IsOptional() @IsNumber() commissionPct?: number;
 }

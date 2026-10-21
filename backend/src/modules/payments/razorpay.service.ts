@@ -2,57 +2,28 @@ import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import Razorpay from 'razorpay';
 
+/** True only when explicitly enabled and never in production: lets you exercise every payment flow locally without Razorpay keys. */
+export const devPaymentsEnabled = () => process.env.ALLOW_DEV_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production';
+
 @Injectable()
 export class RazorpayService {
-  private client: Razorpay;
-
-  constructor() {
-    this.client = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID as string,
-      key_secret: process.env.RAZORPAY_KEY_SECRET as string,
-    });
+  private client: Razorpay | null = null;
+  private getClient(): Razorpay {
+    if (!this.client) this.client = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID as string, key_secret: process.env.RAZORPAY_KEY_SECRET as string });
+    return this.client;
   }
-
-  /** Creates a Razorpay order. Amount is in rupees; Razorpay expects paise. */
+  private hasKeys() { return !!process.env.RAZORPAY_KEY_ID && !!process.env.RAZORPAY_KEY_SECRET && !process.env.RAZORPAY_KEY_ID.includes('placeholder'); }
   async createOrder(amountRupees: number, receipt: string, notes?: Record<string, string>) {
-    return this.client.orders.create({
-      amount: Math.round(amountRupees * 100),
-      currency: 'INR',
-      receipt,
-      notes,
-    });
+    if (!this.hasKeys() && devPaymentsEnabled()) return { id: `order_dev_${crypto.randomBytes(8).toString('hex')}`, amount: Math.round(amountRupees * 100), currency: 'INR' } as any;
+    return this.getClient().orders.create({ amount: Math.round(amountRupees * 100), currency: 'INR', receipt, notes });
   }
-
-  /** Verifies the signature returned to the client after checkout (defense in depth — webhook is the source of truth). */
-  verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
-    const expected = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
-      .update(`${orderId}|${paymentId}`)
-      .digest('hex');
-    return expected === signature;
-  }
-
-  /** Verifies an incoming webhook's signature. This is the ONLY trusted source for payment-status changes. */
+  verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean { const expected = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string).update(`${orderId}|${paymentId}`).digest('hex'); return expected === signature; }
   verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
-    const expected = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET as string)
-      .update(rawBody)
-      .digest('hex');
-    return expected === signatureHeader;
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+    if (!secret || !signatureHeader) return false;
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const a = Buffer.from(expected), b = Buffer.from(signatureHeader);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
-
-  async createRefund(paymentId: string, amountRupees?: number) {
-    return this.client.payments.refund(paymentId, {
-      amount: amountRupees ? Math.round(amountRupees * 100) : undefined,
-    });
-  }
-
-  /** Payouts to hosts/judges/talents. Requires RazorpayX; falls back to manual bank transfer if not configured. */
-  async createPayout(fundAccountId: string, amountRupees: number, purpose: string) {
-    // Placeholder for RazorpayX Payouts API integration — requires a separate
-    // RazorpayX account and fund_account setup per payee (see DEPLOYMENT.md).
-    throw new Error(
-      'RazorpayX payouts not configured. See DEPLOYMENT.md "Configuring Payouts" section.',
-    );
-  }
+  async createRefund(paymentId: string, amountRupees?: number) { return this.getClient().payments.refund(paymentId, { amount: amountRupees ? Math.round(amountRupees * 100) : undefined }); }
 }
