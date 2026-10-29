@@ -28,7 +28,7 @@ export class OtpService {
       await this.discard(record.id);
       this.logger.error('SMS is not configured. OTP was not sent.');
       throw new ServiceUnavailableException('Could not send the OTP right now. Please try again shortly.');
-    } else { this.logger.debug(`[DEV ONLY] OTP for ${mobile}: ${code}`); }
+    } else { this.logger.warn(`[DEV ONLY] OTP for ${mobile}: ${code}`); }
     return { sent: true, expiresInSeconds: OTP_TTL_MINUTES * 60 };
   }
   private async discard(id: string) { await this.prisma.otpCode.delete({ where: { id } }).catch(() => undefined); }
